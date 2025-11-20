@@ -125,7 +125,10 @@ void setup() {
 
 void loop() {
   Radio.IrqProcess();
-
+  // Постоянный ШИМ 900 мкс, если мотор не работает
+  if (!motorRunning && !localTest) {
+      esc.writeMicroseconds(900);
+  }
   // === ЛОКАЛЬНАЯ ПРОВЕРКА ПО КНОПКЕ PRG НА SLAVE ===
   if (digitalRead(PRG_PIN) == LOW && !motorRunning) {
     delay(50);
