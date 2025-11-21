@@ -128,7 +128,6 @@ void loop() {
         Radio.Send((uint8_t*)txpacket, strlen(txpacket));   // ← правильний буфер!
 
         Serial.printf("ДВИГУН ВСТАНОВЛЕНО НА %d%%\n", speedPercent);
-        // ← ДОДАЙ ЦІ 3 РЯДКИ КУДИ ЗАВГОДНО ПІСЛЯ ОБРОБКИ КОМАНДИ
         Serial.flush();                    // дочекаємося відправки
         delay(50);                         // маленька пауза для CH340
         Serial.println("OK");             // ← ОТВЕТ, КОТОРЫЙ C# ЖДЕТ!
