@@ -25,8 +25,11 @@ void OnTxDone();
 void OnTxTimeout();
 void OnRxDone(uint8_t *payload, uint16_t size, int16_t rssi, int8_t snr);
 
+float vibX, vibY, vibZ;
+int motorSpeed = 0;  // актуальна швидкість мотора
 bool buttonPressed = false;
 int speedPercent = 0;
+int16_t rssi;
 
 void VextON() {
   pinMode(Vext, OUTPUT);
@@ -48,33 +51,37 @@ void OnTxTimeout() {
   Radio.Rx(0);
 }
 
-void OnRxDone(uint8_t *payload, uint16_t size, int16_t rssi, int8_t snr) {
+void OnRxDone(uint8_t *payload, uint16_t size, int16_t rssiIn, int8_t snr) {
+  String msg = "";
   memcpy(rxpacket, payload, size);
   rxpacket[size] = '\0';
-  
-  String msg = "";
+
   for (int i = 0; i < size; i++) {
     msg += (char)payload[i];
   }
 
   Serial.println("Received: " + msg);
-
+  rssi = rssiIn;
   if (msg.startsWith("VIB:")) {
     int firstComma = msg.indexOf(',');
     int secondComma = msg.indexOf(',', firstComma + 1);
 
-    float vibX = msg.substring(4, firstComma).toFloat();
-    float vibY = msg.substring(firstComma + 1, secondComma).toFloat();
-    float vibZ = msg.substring(secondComma + 1).toFloat();
-
+    vibX = msg.substring(4, firstComma).toFloat();
+    vibY = msg.substring(firstComma + 1, secondComma).toFloat();
+    vibZ = msg.substring(secondComma + 1).toFloat();
+  }
+  if(msg.startsWith("SPD:")) {
+    motorSpeed = msg.substring(4).toInt(); // швидкість мотора
+  }
     myDisplay.clear();
     myDisplay.drawString(40, 0, "MASTER");
+    myDisplay.drawString(0, 40, "Motor: " + String(motorSpeed));
     myDisplay.drawString(0, 50, "RSSI: " + String(rssi));
     myDisplay.drawString(70, 30, "Vib x: " + String(vibX, 3));
     myDisplay.drawString(70, 40, "Vib y: " + String(vibY, 3));
     myDisplay.drawString(70, 50, "Vib z: " + String(vibZ, 3));
     myDisplay.display();
-  }
+  
 
   Radio.Rx(0);
 }
@@ -82,24 +89,24 @@ void OnRxDone(uint8_t *payload, uint16_t size, int16_t rssi, int8_t snr) {
 void setup() {
 
   Serial.begin(115200);
+
   pinMode(0, INPUT_PULLUP);
   myDisplay.init();
   myDisplay.setContrast(255);
   myDisplay.clear();
+
   VextON();
   delay(100);
 
   Mcu.begin(HELTEC_BOARD, SLOW_CLK_TPYE);
-  // малюємо логотип у верхньому лівому куті
+              // малюємо логотип
   myDisplay.drawXbm(0, 0, mylogo_width, mylogo_height, mylogo_bits);
-
   myDisplay.display();
-  delay(2000); // показати логотип 2 секунди
+  delay(3000);           // затримка лого при запуску плати
   myDisplay.clear();
 
   
-  myDisplay.drawString(0, 0, "MASTER READY");
-  myDisplay.drawString(0, 20, "PC CONTROL ACTIVE");
+  myDisplay.drawString(30, 0, "MASTER READY");
   myDisplay.display();
 
   RadioEvents.TxDone = OnTxDone;
@@ -118,10 +125,6 @@ void setup() {
                     LORA_IQ_INVERSION_ON, true);
 
   Radio.Rx(0);
-
-  Serial.println("");
-  Serial.print("MASTER ГОТОВИЙ — ЧЕКАЮ КОМАНД З ПК");
-  Serial.println("");
 }
 
 void loop() {
