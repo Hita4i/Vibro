@@ -3,12 +3,12 @@
 #include <Wire.h>
 #include "HT_SSD1306Wire.h"
 #include <ESP32Servo.h>
-
+#include <MAVLink.h>
 SSD1306Wire myDisplay(0x3c, 500000, SDA_OLED, SCL_OLED, GEOMETRY_128_64, RST_OLED);
 Servo esc;
 #define ESC_PIN 19        // Белый провод → GPIO19
 #define PRG_PIN 0         // Кнопка PRG на SLAVE
-HardwareSerial FC(2);
+HardwareSerial FC(2);  // UART2 для Pixhawk (RX=46, TX=45)
 
 
 #define RF_FREQUENCY 868000000
@@ -95,22 +95,21 @@ void OnRxDone(uint8_t *payload, uint16_t size, int16_t rssi, int8_t snr) {
 
 void setup() {
   Serial.begin(115200);
-  pinMode(PRG_PIN, INPUT_PULLUP);  // Кнопка на SLAVE
-  
-  VextON();
-  delay(100);
-  
+  //-------------------------------------------------------------------
   FC.begin(115200, SERIAL_8N1, 46, 45);
   Serial.println("Ожидание MAVLink-сообщений от Pixhawk...");
-  
+  //-------------------------------------------------------------------
+  pinMode(PRG_PIN, INPUT_PULLUP);  // Кнопка на SLAVE
+  VextON();
+  delay(100);
+    
   Mcu.begin(HELTEC_BOARD, SLOW_CLK_TPYE);
 
   myDisplay.init();
   myDisplay.setContrast(255);
   myDisplay.clear();
-  myDisplay.drawString(0, 0, "SLAVE");
-  myDisplay.drawString(0, 15, "WAITING...");
-  myDisplay.drawString(0, 30, "PRG = 1200us TEST");
+  myDisplay.drawString(0, 0, "WAITING...");
+  myDisplay.drawString(0, 15, "PRG = 1200us TEST");
   myDisplay.display();
 
   esc.attach(ESC_PIN, 1000, 2000);
@@ -130,46 +129,69 @@ void setup() {
 
 void loop() {
   Radio.IrqProcess();
+  static mavlink_message_t msg;
+  static mavlink_status_t status;
+
   static uint8_t buffer[280];
   static uint16_t index = 0;
 
-  while (FC.available()) {
+// ===================== MAVLINK V2 ПАРСЕР =====================
+  while (FC.available() > 0) {
     uint8_t c = FC.read();
-    buffer[index++] = c;
 
-    if (index >= 10 && buffer[0] == 0xFD) {
-      uint8_t payloadLen = buffer[1];
-      uint32_t msgId = buffer[7] | (buffer[8] << 8) | (buffer[9] << 16);
-      uint16_t packetLen = payloadLen + 12;
-
-      if (index >= packetLen) {
-        if (msgId == 0) Serial.println("✅ HEARTBEAT отримано!");
-        if (msgId == 241 && payloadLen >= 24) {
-          float vibX = *((float*)&buffer[10]);
-          float vibY = *((float*)&buffer[14]);
-          float vibZ = *((float*)&buffer[18]);
-          Serial.println("📊 VIBRATION:");
-          Serial.print("  X: "); Serial.println(vibX, 6);
-          Serial.print("  Y: "); Serial.println(vibY, 6);
-          Serial.print("  Z: "); Serial.println(vibZ, 6);
+    // парсимо байти через бібліотеку
+    if (mavlink_parse_char(MAVLINK_COMM_0, c, &msg, &status)) {
+      // коли отримали повний пакет
+      switch (msg.msgid) {
+        case MAVLINK_MSG_ID_HEARTBEAT: {
+          Serial.println("✅ HEARTBEAT отримано!");
+          break;
         }
-        index = 0;
+
+        case MAVLINK_MSG_ID_VIBRATION: {
+          mavlink_vibration_t vibration;
+          mavlink_msg_vibration_decode(&msg, &vibration);
+
+          Serial.println("📊 VIBRATION:");
+          Serial.print("  Vibration X: "); Serial.println(vibration.vibration_x, 6);
+          Serial.print("  Vibration Y: "); Serial.println(vibration.vibration_y, 6);
+          Serial.print("  Vibration Z: "); Serial.println(vibration.vibration_z, 6);
+          myDisplay.clear();
+          myDisplay.drawString(70, 30, "Vib x: " + String(vibration.vibration_x, 3));
+          myDisplay.drawString(70, 40, "Vib y: " + String(vibration.vibration_y, 3));
+          myDisplay.drawString(70, 50, "Vib z: " + String(vibration.vibration_z, 3));
+          myDisplay.display();
+          if(vibration.clipping_0 > 0 || vibration.clipping_1 > 0 || vibration.clipping_2 > 0){
+            Serial.print("  Clipping 0: "); Serial.println(vibration.clipping_0);
+            Serial.print("  Clipping 1: "); Serial.println(vibration.clipping_1);
+            Serial.print("  Clipping 2: "); Serial.println(vibration.clipping_2);
+          }
+          
+          break;
+        }
+
+        default:
+          // інші повідомлення можна обробляти тут
+          break;
       }
     }
-    if (index > sizeof(buffer) - 1) index = 0;
+  }
+  // ============================================================
 
   // Постоянный ШИМ 900 мкс, если мотор не работает
   if (!motorRunning && !localTest) {
-      esc.writeMicroseconds(900);
+    esc.writeMicroseconds(900);
   }
-  // === ЛОКАЛЬНАЯ ПРОВЕРКА ПО КНОПКЕ PRG НА SLAVE ===
+
+  // Кнопка PRG — локальный тест
   if (digitalRead(PRG_PIN) == LOW && !motorRunning) {
-    delay(50);
+    delay(20);
     if (digitalRead(PRG_PIN) == LOW) {
       setMotorTest();
-      while (digitalRead(PRG_PIN) == LOW);  // Ждём отпускания
-      
+      while (digitalRead(PRG_PIN) == LOW) delay(10);
     }
   }
+
   delay(10);
 }
+
