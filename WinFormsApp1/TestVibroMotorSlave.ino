@@ -4,6 +4,7 @@
 #include "HT_SSD1306Wire.h"
 #include <ESP32Servo.h>
 #include <MAVLink.h>
+#include "images.h"
 SSD1306Wire myDisplay(0x3c, 500000, SDA_OLED, SCL_OLED, GEOMETRY_128_64, RST_OLED);
 Servo esc;
 #define ESC_PIN 19        // Белый провод → GPIO19
@@ -62,6 +63,7 @@ void setMotorTest() {
   myDisplay.drawString(0, 15, "1200 us");
   myDisplay.drawString(0, 30, "RUNNING...");
   myDisplay.display();
+  
 }
 
 void stopMotor() {
@@ -97,8 +99,7 @@ void setup() {
   Serial.begin(115200);
   //-------------------------------------------------------------------
   FC.begin(115200, SERIAL_8N1, 46, 45);
-  Serial.println("Ожидание MAVLink-сообщений от Pixhawk...");
-  //-------------------------------------------------------------------
+    //-------------------------------------------------------------------
   pinMode(PRG_PIN, INPUT_PULLUP);  // Кнопка на SLAVE
   VextON();
   delay(100);
@@ -107,6 +108,10 @@ void setup() {
 
   myDisplay.init();
   myDisplay.setContrast(255);
+
+  myDisplay.drawXbm(0, 0, mylogo_width, mylogo_height, mylogo_bits);
+  myDisplay.display();
+  delay(3000); // показати логотип 2 секунди
   myDisplay.clear();
   myDisplay.drawString(0, 0, "WAITING...");
   myDisplay.drawString(0, 15, "PRG = 1200us TEST");
@@ -132,50 +137,33 @@ void loop() {
   static mavlink_message_t msg;
   static mavlink_status_t status;
 
-  static uint8_t buffer[280];
-  static uint16_t index = 0;
-
 // ===================== MAVLINK V2 ПАРСЕР =====================
   while (FC.available() > 0) {
     uint8_t c = FC.read();
-
-    // парсимо байти через бібліотеку
     if (mavlink_parse_char(MAVLINK_COMM_0, c, &msg, &status)) {
-      // коли отримали повний пакет
-      switch (msg.msgid) {
-        case MAVLINK_MSG_ID_HEARTBEAT: {
-          Serial.println("✅ HEARTBEAT отримано!");
-          break;
-        }
+      if (msg.msgid == MAVLINK_MSG_ID_VIBRATION) {
+        mavlink_vibration_t vibration;
+        mavlink_msg_vibration_decode(&msg, &vibration);
 
-        case MAVLINK_MSG_ID_VIBRATION: {
-          mavlink_vibration_t vibration;
-          mavlink_msg_vibration_decode(&msg, &vibration);
+        // Формуємо пакет для LoRa
+        String vibMsg = "VIB:" + String(vibration.vibration_x, 3) + "," +
+                                String(vibration.vibration_y, 3) + "," +
+                                String(vibration.vibration_z, 3);
 
-          Serial.println("📊 VIBRATION:");
-          Serial.print("  Vibration X: "); Serial.println(vibration.vibration_x, 6);
-          Serial.print("  Vibration Y: "); Serial.println(vibration.vibration_y, 6);
-          Serial.print("  Vibration Z: "); Serial.println(vibration.vibration_z, 6);
-          myDisplay.clear();
-          myDisplay.drawString(70, 30, "Vib x: " + String(vibration.vibration_x, 3));
-          myDisplay.drawString(70, 40, "Vib y: " + String(vibration.vibration_y, 3));
-          myDisplay.drawString(70, 50, "Vib z: " + String(vibration.vibration_z, 3));
-          myDisplay.display();
-          if(vibration.clipping_0 > 0 || vibration.clipping_1 > 0 || vibration.clipping_2 > 0){
-            Serial.print("  Clipping 0: "); Serial.println(vibration.clipping_0);
-            Serial.print("  Clipping 1: "); Serial.println(vibration.clipping_1);
-            Serial.print("  Clipping 2: "); Serial.println(vibration.clipping_2);
-          }
-          
-          break;
-        }
+        Radio.Send((uint8_t*)vibMsg.c_str(), vibMsg.length());
 
-        default:
-          // інші повідомлення можна обробляти тут
-          break;
+        // Вивід на дисплей для контролю
+        myDisplay.clear();
+        myDisplay.drawString(80, 30, "X: " + String(vibration.vibration_x, 3));
+        myDisplay.drawString(80, 40, "Y: " + String(vibration.vibration_y, 3));
+        myDisplay.drawString(80, 50, "Z: " + String(vibration.vibration_z, 3));
+        myDisplay.display();
       }
     }
   }
+
+
+
   // ============================================================
 
   // Постоянный ШИМ 900 мкс, если мотор не работает
@@ -194,4 +182,3 @@ void loop() {
 
   delay(10);
 }
-
