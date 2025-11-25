@@ -7,9 +7,9 @@
 #include "images.h"
 SSD1306Wire myDisplay(0x3c, 500000, SDA_OLED, SCL_OLED, GEOMETRY_128_64, RST_OLED);
 Servo esc;
-#define ESC_PIN 19        // Белый провод → GPIO19
+#define ESC_PIN 19         // Белый провод → GPIO19
 #define PRG_PIN 0         // Кнопка PRG на SLAVE
-HardwareSerial FC(2);  // UART2 для Pixhawk (RX=46, TX=45)
+HardwareSerial FC(2);    // UART2 для Pixhawk (RX=46, TX=45)
 
 
 #define RF_FREQUENCY 868000000
@@ -25,6 +25,11 @@ HardwareSerial FC(2);  // UART2 для Pixhawk (RX=46, TX=45)
 
 char rxpacket[BUFFER_SIZE];
 int currentSpeed = 0;
+int motorSpeed = 0;
+void OnTxDone(void) {
+  Serial.println("LoRa packet sent!");
+}
+
 unsigned long motorStartTime = 0;
 bool motorRunning = false;
 bool localTest = false;
@@ -103,18 +108,18 @@ void setup() {
   pinMode(PRG_PIN, INPUT_PULLUP);  // Кнопка на SLAVE
   VextON();
   delay(100);
-    
   Mcu.begin(HELTEC_BOARD, SLOW_CLK_TPYE);
 
   myDisplay.init();
   myDisplay.setContrast(255);
+  myDisplay.clear();
 
   myDisplay.drawXbm(0, 0, mylogo_width, mylogo_height, mylogo_bits);
   myDisplay.display();
   delay(3000); // показати логотип 2 секунди
+
   myDisplay.clear();
-  myDisplay.drawString(0, 0, "WAITING...");
-  myDisplay.drawString(0, 15, "PRG = 1200us TEST");
+  myDisplay.drawString(30, 0, "SLAVE READY");
   myDisplay.display();
 
   esc.attach(ESC_PIN, 1000, 2000);
@@ -147,17 +152,18 @@ void loop() {
 
         // Формуємо пакет для LoRa
         String vibMsg = "VIB:" + String(vibration.vibration_x, 3) + "," +
-                                String(vibration.vibration_y, 3) + "," +
-                                String(vibration.vibration_z, 3);
+                                 String(vibration.vibration_y, 3) + "," +
+                                 String(vibration.vibration_z, 3) +
+                                 ";SPD:" + String(motorSpeed);
 
         Radio.Send((uint8_t*)vibMsg.c_str(), vibMsg.length());
 
-        // Вивід на дисплей для контролю
-        myDisplay.clear();
-        myDisplay.drawString(80, 30, "X: " + String(vibration.vibration_x, 3));
-        myDisplay.drawString(80, 40, "Y: " + String(vibration.vibration_y, 3));
-        myDisplay.drawString(80, 50, "Z: " + String(vibration.vibration_z, 3));
-        myDisplay.display();
+        // // Вивід на дисплей для контролю
+        // myDisplay.clear();
+        // myDisplay.drawString(80, 30, "X: " + String(vibration.vibration_x, 3));
+        // myDisplay.drawString(80, 40, "Y: " + String(vibration.vibration_y, 3));
+        // myDisplay.drawString(80, 50, "Z: " + String(vibration.vibration_z, 3));
+        // myDisplay.display();
       }
     }
   }
