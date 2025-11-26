@@ -23,7 +23,8 @@ Servo esc;
 #define BUFFER_SIZE 32
 
 HardwareSerial FC(2);    // UART2 для Pixhawk (RX=46, TX=45)
-mavlink_vibration_t vibration;
+static mavlink_message_t msg;
+
 
 char rxpacket[BUFFER_SIZE];
 int currentSpeed = 0;
@@ -101,24 +102,27 @@ void OnRxDone(uint8_t *payload, uint16_t size, int16_t rssi, int8_t snr) {
 
   Radio.Rx(0);
 }
-void parseVibration(mavlink_message_t* msg) {
-  if (msg->msgid == MAVLINK_MSG_ID_VIBRATION) {
-    mavlink_msg_vibration_decode(msg, &vibration);
-  }
-}
-void drawVibrationOLED() {
-  myDisplay.clear();
-    myDisplay.drawString(23, 0, "SLAVE READY");
-  myDisplay.drawString(40, 15, "WAITING...");
-  myDisplay.drawString(80, 30, "X: " + String(vibration.vibration_x, 3));
-  myDisplay.drawString(80, 40, "Y: " + String(vibration.vibration_y, 3));
-  myDisplay.drawString(80, 50, "Z: " + String(vibration.vibration_z, 3));
-  myDisplay.display();
-}
+// void parseVibration(mavlink_message_t* m) {
+//   if (m->msgid == MAVLINK_MSG_ID_VIBRATION) {
+//     mavlink_msg_vibration_decode(m, &vibration);
+//   }
+// }
+// void drawVibrationOLED() {
+//   myDisplay.clear();
+//     myDisplay.drawString(23, 0, "SLAVE READY");
+//   myDisplay.drawString(40, 15, "WAITING...");
+//   myDisplay.drawString(80, 30, "X: " + String(vibration.vibration_x, 3));
+//   myDisplay.drawString(80, 40, "Y: " + String(vibration.vibration_y, 3));
+//   myDisplay.drawString(80, 50, "Z: " + String(vibration.vibration_z, 3));
+//   myDisplay.display();
+// }
 
 
 void setup() {
   Serial.begin(115200);
+  FC.begin(115200, SERIAL_8N1, 46, 45);
+  Serial.println("Ожидание MAVLink-сообщений от Pixhawk...");
+
   pinMode(PRG_PIN, INPUT_PULLUP);  // Кнопка на SLAVE
 
   VextON();
@@ -157,8 +161,8 @@ void setup() {
 void loop() {
   Radio.IrqProcess();
   static unsigned long lastUpdate = 0;
-  static mavlink_message_t msg;   // оголошуємо повідомлення
-  static mavlink_status_t status; // оголошуємо статус
+  static mavlink_message_t msg;
+  static mavlink_status_t status;
 
   // Постоянный ШИМ 900 мкс, если мотор не работает
   if (!motorRunning && !localTest) {
@@ -175,18 +179,21 @@ void loop() {
     while (FC.available() > 0) {
       uint8_t c = FC.read();
       if (mavlink_parse_char(MAVLINK_COMM_0, c, &msg, &status)) {
-      // Викликаємо наш метод
-      parseVibration(&msg);
-
+        if (msg.msgid == MAVLINK_MSG_ID_VIBRATION) {
+          mavlink_vibration_t vibration;
+          mavlink_msg_vibration_decode(&msg, &vibration);
+          Serial.print("X: "); Serial.println(vibration.vibration_x);
+          Serial.print("Y: "); Serial.println(vibration.vibration_y);
+          Serial.print("Z: "); Serial.println(vibration.vibration_z);
+        }
+      }
     }
-  }
-if (millis() - lastUpdate > 200) { // оновлюємо раз на 200 мс
-  lastUpdate = millis();
-  myDisplay.clear();
-  drawVibrationOLED();
-  myDisplay.display();
-}
-
+  // if (millis() - lastUpdate > 200) { // оновлюємо раз на 200 мс
+  //   lastUpdate = millis();
+  //   myDisplay.clear();
+  //   drawVibrationOLED();
+  //   myDisplay.display();
+  //   }
 
   delay(10);
 }
