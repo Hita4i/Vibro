@@ -103,11 +103,25 @@ void OnRxDone(uint8_t *payload, uint16_t size, int16_t rssi, int8_t snr) {
 
   Radio.Rx(0);
 }
+//---------------------------------------ParseVibro----------------------------------------
+// парс вибрации
 void parseVibration(const mavlink_message_t* msg) {
   if (msg->msgid == MAVLINK_MSG_ID_VIBRATION) {
     mavlink_msg_vibration_decode(msg, &vibration);
   }
 }
+
+//---------------------------------отправка вибро на мастер---------------------------------
+void sendVibrationToMaster() {
+  // формируем строку с вибрациями
+  String vibMsg = String(vibration.vibration_x, 3) + "," +
+                  String(vibration.vibration_y, 3) + "," +
+                  String(vibration.vibration_z, 3);
+
+  // отправляем по LoRa
+  Radio.Send((uint8_t*)vibMsg.c_str(), vibMsg.length());
+}
+
 //--------------------------------DrawOled--------------------------------------------
 void drawVibrationOLED() {
   myDisplay.drawString(80, 30, "X: " + String(vibration.vibration_x, 3));
@@ -187,11 +201,14 @@ void loop() {
       // 1) Парсим вибрации в глобальную структуру
       parseVibration(&msg);
 
-      // 2) Диагностика — как у тебя сейчас
+      // 2) Диагностика
       if (msg.msgid == MAVLINK_MSG_ID_VIBRATION) {
+        mavlink_msg_vibration_decode(&msg, &vibration);
+
         Serial.print("X: "); Serial.println(vibration.vibration_x);
         Serial.print("Y: "); Serial.println(vibration.vibration_y);
         Serial.print("Z: "); Serial.println(vibration.vibration_z);
+        sendVibrationToMaster();
       }
 
       // 3) Обновление экрана — безопасно и переиспользуемо
@@ -205,4 +222,5 @@ void loop() {
       }
     }
   }
+
 }
