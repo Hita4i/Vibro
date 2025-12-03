@@ -132,7 +132,7 @@ void drawVibrationOLED() {
 void drawStartInfoOLED(){
   myDisplay.drawString(23, 0, "SLAVE READY");
   myDisplay.drawString(15, 15, "PRG = 1200us TEST");
-  myDisplay.drawString(00, 30, "MSPD: " + String(currentSpeed) + "%");
+  myDisplay.drawString(00, 30, "MSpeed: " + String(currentSpeed) + "%");
 }
 //-------------------------------------------------------------------------------------
 void setup() {
