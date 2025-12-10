@@ -112,15 +112,15 @@ void parseVibration(const mavlink_message_t* msg) {
 }
 
 //---------------------------------отправка вибро на мастер---------------------------------
-void sendVibrationToMaster() {
-  // формируем строку с вибрациями
-  String vibMsg = String(vibration.vibration_x, 3) + "," +
-                  String(vibration.vibration_y, 3) + "," +
-                  String(vibration.vibration_z, 3);
+// void sendVibrationToMaster() {
+//   // формируем строку с вибрациями
+//   String vibMsg = String(vibration.vibration_x, 3) + "," +
+//                   String(vibration.vibration_y, 3) + "," +
+//                   String(vibration.vibration_z, 3);
 
-  // отправляем по LoRa
-  Radio.Send((uint8_t*)vibMsg.c_str(), vibMsg.length());
-}
+//   // отправляем по LoRa
+//   Radio.Send((uint8_t*)vibMsg.c_str(), vibMsg.length());
+// }
 
 //--------------------------------DrawOled--------------------------------------------
 void drawVibrationOLED() {
@@ -219,7 +219,6 @@ void loop() {
         drawStartInfoOLED();
         drawVibrationOLED();
         myDisplay.display();
-        sendVibrationToMaster();
       }
     }
   }
